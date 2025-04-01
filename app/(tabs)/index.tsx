@@ -1,74 +1,156 @@
-import { Image, StyleSheet, Platform } from 'react-native';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Dimensions,
+  TouchableOpacity,
+  ScrollView,
+} from "react-native";
+import { ProgressChart } from "react-native-chart-kit";
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+type IndicatorValues = {
+  [key: string]: number;
+};
 
-export default function HomeScreen() {
+const unitMap: Record<string, string> = {
+  Voltage: "Volt",
+  Current: "A",
+  Power: "Watt",
+  "Turbine Speed": "RPM",
+  "Flow Rate": "L/s",
+  Pressure: "Pa",
+};
+
+const chartConfig = {
+  backgroundGradientFrom: "#fff",
+  backgroundGradientTo: "#fff",
+  color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
+  labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+  strokeWidth: 12,
+  barPercentage: 0.5,
+};
+
+const initialValues: IndicatorValues = {
+  Voltage: 0.8,
+  Current: 0.6,
+  Power: 0.75,
+  "Turbine Speed": 0.9,
+  "Flow Rate": 0.65,
+  Pressure: 0.7,
+};
+
+export default function Index(): JSX.Element {
+  const [animatedValues, setAnimatedValues] = useState<IndicatorValues>(
+    Object.keys(initialValues).reduce(
+      (acc, key) => ({ ...acc, [key]: 0 }),
+      {} as IndicatorValues
+    )
+  );
+
+  const resetAnimation = () => {
+    Object.keys(initialValues).forEach((key) => {
+      let value = 0;
+      const interval = setInterval(() => {
+        if (value >= initialValues[key]) {
+          clearInterval(interval);
+        } else {
+          value += 0.05;
+          setAnimatedValues((prev) => ({ ...prev, [key]: value }));
+        }
+      }, 50);
+    });
+  };
+
+  useEffect(() => {
+    resetAnimation();
+  }, []);
+
+  const handleCardPress = (label: string) => {
+    console.log(`📊 ${label} clicked!`);
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12'
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    <ScrollView style={styles.container}>
+      <Text style={styles.header}>System Performance</Text>
+
+      <View style={styles.grid}>
+        {Object.keys(animatedValues).map((label, index) => (
+          <TouchableOpacity
+            key={index}
+            style={styles.card}
+            onPress={() => handleCardPress(label)}
+          >
+            <Text style={styles.cardTitle}>{label}</Text>
+
+            <View style={styles.chartContainer}>
+              <ProgressChart
+                data={{ labels: [label], data: [animatedValues[label]] }}
+                width={Dimensions.get("window").width / 2.5}
+                height={120}
+                strokeWidth={12}
+                radius={45}
+                chartConfig={chartConfig}
+                hideLegend={true}
+              />
+              <Text style={styles.valueText}>
+                {Math.round(animatedValues[label] * 100)} {unitMap[label]}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: {
+    padding: 20,
+    backgroundColor: "#f5f5f5",
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  header: {
+    fontSize: 20,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginVertical: 15,
+    color: "#25292e",
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    marginBottom: 40,
+  },
+  card: {
+    width: Dimensions.get("window").width / 2.5,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 15,
+    margin: 5,
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: "semibold",
+    marginBottom: 10,
+    color: "#25292e",
+  },
+  chartContainer: {
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  valueText: {
+    position: "absolute",
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#007AFF",
   },
 });

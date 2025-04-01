@@ -13,9 +13,10 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/Company.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.naufal_husnianto.Agnivolt"
     },
     "web": {
       "bundler": "metro",
@@ -36,6 +37,14 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "97756a8c-6760-4ca4-a20f-817cecdd91cd"
+      }
     }
   }
 }
