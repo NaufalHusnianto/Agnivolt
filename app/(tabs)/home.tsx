@@ -40,7 +40,7 @@ const initialValues: IndicatorValues = {
   Pressure: 0.7,
 };
 
-export default function Index(): JSX.Element {
+export default function Home(): JSX.Element {
   const [animatedValues, setAnimatedValues] = useState<IndicatorValues>(
     Object.keys(initialValues).reduce(
       (acc, key) => ({ ...acc, [key]: 0 }),

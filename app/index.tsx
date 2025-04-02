@@ -21,12 +21,12 @@ export default function Index() {
         style={{ width: 300, height: 180, marginTop: 50 }}
       />
 
-      <Link href="/(tabs)" style={styles.button}>
+      <Link href="/(tabs)/home" style={styles.button}>
         Get Started
       </Link>
       <Text style={{ marginTop: 30 }}>
         Already have an account?{" "}
-        <Link href="/(tabs)" style={styles.link}>
+        <Link href="/(tabs)/home" style={styles.link}>
           Login
         </Link>
       </Text>
