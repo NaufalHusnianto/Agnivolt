@@ -11,7 +11,6 @@ import { LineChart } from "react-native-chart-kit";
 import { Ionicons } from "@expo/vector-icons";
 import { getDatabase, ref, onValue } from "firebase/database";
 
-
 const chartConfig = {
   backgroundGradientFrom: "#fff",
   backgroundGradientTo: "#fff",
@@ -26,8 +25,8 @@ export default function HistoryScreen() {
   const [showDropdown, setShowDropdown] = useState(false);
 
   const [labels, setLabels] = useState<string[]>([]);
-  const [voltageData, setVoltageData] = useState<number[]>([]);
-  const [currentData, setCurrentData] = useState<number[]>([]);
+  const [voltageData, setVoltageData] = useState<number[]>([0]);
+  const [currentData, setCurrentData] = useState<number[]>([0]);
 
   useEffect(() => {
     const database = getDatabase();
@@ -36,7 +35,7 @@ export default function HistoryScreen() {
     const listener = onValue(reference, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
-        const dates: string[] = Object.keys(data).sort(); 
+        const dates: string[] = Object.keys(data).sort();
 
         const newVoltage: number[] = [];
         const newCurrent: number[] = [];
@@ -46,6 +45,8 @@ export default function HistoryScreen() {
           if (daily.count > 0) {
             newVoltage.push(daily.total_tegangan / daily.count);
             newCurrent.push(daily.total_arus / daily.count);
+            console.log("Voltage Data:", voltageData);
+            console.log("Current Data:", currentData);
           }
         });
 

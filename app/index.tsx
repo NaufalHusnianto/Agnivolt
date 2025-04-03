@@ -2,6 +2,7 @@ import { Link } from "expo-router";
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, Image } from "react-native";
 
+
 export default function Index() {
   return (
     <View style={styles.container}>
