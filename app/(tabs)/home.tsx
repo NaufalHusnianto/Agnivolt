@@ -1,25 +1,14 @@
 import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Dimensions,
-  TouchableOpacity,
-  ScrollView,
-} from "react-native";
+import { View, Text, StyleSheet, Dimensions, ScrollView } from "react-native";
 import { ProgressChart } from "react-native-chart-kit";
-
-type IndicatorValues = {
-  [key: string]: number;
-};
+import { database, ref, onValue } from "../firebaseConfig";
+import { format } from "date-fns";
 
 const unitMap: Record<string, string> = {
-  Voltage: "Volt",
-  Current: "A",
-  Power: "Watt",
-  "Turbine Speed": "RPM",
-  "Flow Rate": "L/s",
-  Pressure: "Pa",
+  arus: "A",
+  daya: "Watt",
+  tegangan: "Volt",
+  rpm: "RPM",
 };
 
 const chartConfig = {
@@ -31,74 +20,82 @@ const chartConfig = {
   barPercentage: 0.5,
 };
 
-const initialValues: IndicatorValues = {
-  Voltage: 0.8,
-  Current: 0.6,
-  Power: 0.75,
-  "Turbine Speed": 0.9,
-  "Flow Rate": 0.65,
-  Pressure: 0.7,
+const maxValues: Record<string, number> = {
+  arus: 5, 
+  daya: 50, 
+  tegangan: 10, 
+  rpm: 1000, 
 };
 
-export default function Home(): JSX.Element {
-  const [animatedValues, setAnimatedValues] = useState<IndicatorValues>(
-    Object.keys(initialValues).reduce(
-      (acc, key) => ({ ...acc, [key]: 0 }),
-      {} as IndicatorValues
-    )
-  );
 
-  const resetAnimation = () => {
-    Object.keys(initialValues).forEach((key) => {
-      let value = 0;
-      const interval = setInterval(() => {
-        if (value >= initialValues[key]) {
-          clearInterval(interval);
-        } else {
-          value += 0.05;
-          setAnimatedValues((prev) => ({ ...prev, [key]: value }));
-        }
-      }, 50);
-    });
+export default function Home(): JSX.Element {
+  const [sensorData, setSensorData] = useState<{ arus: number; daya: number; tegangan: number; rpm: number } | null>(null);
+  
+  const getCurrentDate = () => {
+    const today = new Date();
+    return today.toISOString().split("T")[0]; 
   };
 
   useEffect(() => {
-    resetAnimation();
-  }, []);
+    const today = format(new Date(), "yyyy-MM-dd");
+    const reference = ref(database, `TurbineData/turbine1/daily_data/${today}`);
 
-  const handleCardPress = (label: string) => {
-    console.log(`📊 ${label} clicked!`);
-  };
+    const onValueChange = onValue(reference, (snapshot) => {
+      if (snapshot.exists()) {
+        const newData = snapshot.val() as Partial<typeof maxValues>; 
+      
+        console.log("Data diperbarui:", newData);
+      
+        const filteredData: { arus: number; daya: number; tegangan: number; rpm: number } = {
+          arus: (newData.arus ?? 0) / maxValues.arus,
+          daya: (newData.daya ?? 0) / maxValues.daya,
+          tegangan: (newData.tegangan ?? 0) / maxValues.tegangan,
+          rpm: (newData.rpm ?? 0) / maxValues.rpm,
+        };
+      
+        setSensorData(filteredData);
+      }else{
+        setSensorData({
+          arus: 0,
+          daya: 0,
+          tegangan: 0,
+          rpm: 0,
+        });
+      }
+    });
+
+    return () => onValueChange();
+  }, []);
 
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.header}>System Performance</Text>
 
       <View style={styles.grid}>
-        {Object.keys(animatedValues).map((label, index) => (
-          <TouchableOpacity
-            key={index}
-            style={styles.card}
-            onPress={() => handleCardPress(label)}
-          >
-            <Text style={styles.cardTitle}>{label}</Text>
+        {sensorData ? (
+          Object.keys(sensorData).map((label, index) => (
+            <View key={index} style={styles.card}>
+              <Text style={styles.cardTitle}>{label.toUpperCase()}</Text>
 
-            <View style={styles.chartContainer}>
-              <ProgressChart
-                data={{ labels: [label], data: [animatedValues[label]] }}
-                width={Dimensions.get("window").width / 2.5}
-                height={120}
-                strokeWidth={12}
-                radius={45}
-                chartConfig={chartConfig}
-                hideLegend={true}
-              />
-              <Text style={styles.valueText}>
-                {Math.round(animatedValues[label] * 100)} {unitMap[label]}
-              </Text>
+              <View style={styles.chartContainer}>
+                <ProgressChart
+                  data={{ labels: [label], data: [sensorData[label as keyof typeof sensorData]] }}
+                  width={Dimensions.get("window").width / 2.5}
+                  height={120}
+                  strokeWidth={12}
+                  radius={45}
+                  chartConfig={chartConfig} 
+                  hideLegend={true}
+                />
+                <Text style={styles.valueText}>
+                  {Math.round(sensorData[label as keyof typeof sensorData] * maxValues[label as keyof typeof maxValues])} {unitMap[label as keyof typeof unitMap]}
+                </Text>
+              </View>
             </View>
-          </TouchableOpacity>
-        ))}
+          ))
+        ) : (
+          <Text style={styles.noDataText}>No data available</Text>
+        )}
       </View>
     </ScrollView>
   );
@@ -153,4 +150,5 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#007AFF",
   },
+  noDataText: { textAlign: 'center', fontSize: 18, color: 'red' },
 });
