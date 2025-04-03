@@ -29,7 +29,13 @@ const maxValues: Record<string, number> = {
 
 
 export default function Home(): JSX.Element {
-  const [sensorData, setSensorData] = useState<{ arus: number; daya: number; tegangan: number; rpm: number } | null>(null);
+  const [sensorData, setSensorData] = useState<{ arus: number; daya: number; tegangan: number; rpm: number }>({
+    arus: 0,
+    daya: 0,
+    tegangan: 0,
+    rpm: 0,
+  });
+  
   
   const getCurrentDate = () => {
     const today = new Date();

@@ -1,37 +1,65 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
-  StyleSheet,
   ScrollView,
   Dimensions,
+  StyleSheet,
+  TouchableOpacity,
 } from "react-native";
-import Ionicons from "@expo/vector-icons/Ionicons";
 import { LineChart } from "react-native-chart-kit";
+import { Ionicons } from "@expo/vector-icons";
+import { getDatabase, ref, onValue } from "firebase/database";
 
-// Data grafik
-const voltageData = [220, 221, 219, 222, 223, 224, 225]; // Data Tegangan
-const currentData = [5, 5.1, 4.9, 5.2, 5.3, 5.4, 5.5]; // Data Arus
-const labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"]; // Label Waktu
 
-// Konfigurasi chart
 const chartConfig = {
   backgroundGradientFrom: "#fff",
   backgroundGradientTo: "#fff",
-  color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
+  decimalPlaces: 2,
+  color: (opacity = 1) => `rgba(0, 0, 255, ${opacity})`,
   labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-  strokeWidth: 2,
-  barPercentage: 0.5,
-  useShadowColorFromDataset: false,
+  style: { borderRadius: 16 },
+  propsForDots: { r: "4", strokeWidth: "2", stroke: "#0000ff" },
 };
 
-export default function History() {
+export default function HistoryScreen() {
   const [showDropdown, setShowDropdown] = useState(false);
+
+  const [labels, setLabels] = useState<string[]>([]);
+  const [voltageData, setVoltageData] = useState<number[]>([]);
+  const [currentData, setCurrentData] = useState<number[]>([]);
+
+  useEffect(() => {
+    const database = getDatabase();
+    const reference = ref(database, "TurbineData/turbine1/daily_data");
+
+    const listener = onValue(reference, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        const dates: string[] = Object.keys(data).sort(); 
+
+        const newVoltage: number[] = [];
+        const newCurrent: number[] = [];
+
+        dates.forEach((date) => {
+          const daily = data[date];
+          if (daily.count > 0) {
+            newVoltage.push(daily.total_tegangan / daily.count);
+            newCurrent.push(daily.total_arus / daily.count);
+          }
+        });
+
+        setLabels(dates);
+        setVoltageData(newVoltage);
+        setCurrentData(newCurrent);
+      }
+    });
+
+    return () => listener();
+  }, []);
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>History</Text>
 
@@ -50,7 +78,6 @@ export default function History() {
           >
             <Text style={styles.menuText}>Opsi 1</Text>
           </TouchableOpacity>
-
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => console.log("Opsi 2")}
@@ -64,11 +91,8 @@ export default function History() {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.chartTitle}>Voltage Over Time</Text>
         <LineChart
-          data={{
-            labels: labels,
-            datasets: [{ data: voltageData }],
-          }}
-          width={Dimensions.get("window").width - 40} // Menyesuaikan lebar dengan ukuran layar
+          data={{ labels, datasets: [{ data: voltageData }] }}
+          width={Dimensions.get("window").width - 40}
           height={220}
           chartConfig={chartConfig}
           bezier
@@ -77,10 +101,7 @@ export default function History() {
 
         <Text style={styles.chartTitle}>Current Over Time</Text>
         <LineChart
-          data={{
-            labels: labels,
-            datasets: [{ data: currentData }],
-          }}
+          data={{ labels, datasets: [{ data: currentData }] }}
           width={Dimensions.get("window").width - 40}
           height={220}
           chartConfig={chartConfig}
