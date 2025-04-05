@@ -9,6 +9,8 @@ const unitMap: Record<string, string> = {
   daya: "Watt",
   tegangan: "Volt",
   rpm: "RPM",
+  ketinggianAir: "cm",
+  debit: "L/s"
 };
 
 const chartConfig = {
@@ -25,15 +27,19 @@ const maxValues: Record<string, number> = {
   daya: 50, 
   tegangan: 10, 
   rpm: 1000, 
+  ketinggianAir: 30,
+  debit: 5
 };
 
 
 export default function Home(): JSX.Element {
-  const [sensorData, setSensorData] = useState<{ arus: number; daya: number; tegangan: number; rpm: number }>({
+  const [sensorData, setSensorData] = useState<{ arus: number; daya: number; tegangan: number; rpm: number ; ketinggianAir: number; debit: number}>({
     arus: 0,
     daya: 0,
     tegangan: 0,
     rpm: 0,
+    ketinggianAir: 0,
+    debit: 0
   });
   
   
@@ -52,11 +58,13 @@ export default function Home(): JSX.Element {
       
         console.log("Data diperbarui:", newData);
       
-        const filteredData: { arus: number; daya: number; tegangan: number; rpm: number } = {
+        const filteredData: { arus: number; daya: number; tegangan: number; rpm: number; ketinggianAir: number; debit: number } = {
           arus: (newData.arus ?? 0) / maxValues.arus,
           daya: (newData.daya ?? 0) / maxValues.daya,
           tegangan: (newData.tegangan ?? 0) / maxValues.tegangan,
           rpm: (newData.rpm ?? 0) / maxValues.rpm,
+          ketinggianAir: (newData.water_level ?? 0) / maxValues.ketinggianAir,
+          debit: (newData.flowRate ?? 0) / maxValues.debit,
         };
       
         setSensorData(filteredData);
@@ -66,6 +74,8 @@ export default function Home(): JSX.Element {
           daya: 0,
           tegangan: 0,
           rpm: 0,
+          ketinggianAir: 0,
+          debit: 0
         });
       }
     });
@@ -94,7 +104,7 @@ export default function Home(): JSX.Element {
                   hideLegend={true}
                 />
                 <Text style={styles.valueText}>
-                  {Math.round(sensorData[label as keyof typeof sensorData] * maxValues[label as keyof typeof maxValues])} {unitMap[label as keyof typeof unitMap]}
+                  {(sensorData[label as keyof typeof sensorData] * maxValues[label as keyof typeof maxValues]).toFixed(1)} {unitMap[label as keyof typeof unitMap]}
                 </Text>
               </View>
             </View>
