@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -8,32 +8,48 @@ import {
   TextInput,
   Modal,
   Alert,
+  Platform,
+  ToastAndroid,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getDatabase, ref, get } from "firebase/database";
-
-// Mock Data untuk perangkat yang terhubung
-const initialDevices = [
-  { id: "1", name: "Device A", status: "Connected" },
-  { id: "2", name: "Device B", status: "Disconnected" },
-  { id: "3", name: "Device C", status: "Connected" },
-];
-import { ToastAndroid, Platform } from "react-native";
 
 const showAlert = (message: string) => {
   if (Platform.OS === "android") {
     ToastAndroid.show(message, ToastAndroid.SHORT);
   } else {
-    Alert.alert("Error", message);
+    Alert.alert("Info", message);
   }
 };
 
-
 export default function Device() {
-  const [devices, setDevices] = useState(initialDevices);
+  const [devices, setDevices] = useState<any[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [inputTurbineId, setInputTurbineId] = useState("");
 
-  // Fungsi untuk mengecek apakah id_turbine ada di Firebase
+  const saveDevicesToStorage = async (devicesList: any[]) => {
+    try {
+      await AsyncStorage.setItem("devices", JSON.stringify(devicesList));
+    } catch (error) {
+      console.error("Gagal menyimpan ke AsyncStorage:", error);
+    }
+  };
+
+  const loadDevicesFromStorage = async () => {
+    try {
+      const storedDevices = await AsyncStorage.getItem("devices");
+      if (storedDevices) {
+        setDevices(JSON.parse(storedDevices));
+      }
+    } catch (error) {
+      console.error("Gagal mengambil dari AsyncStorage:", error);
+    }
+  };
+
+  useEffect(() => {
+    loadDevicesFromStorage();
+  }, []);
+
   const checkTurbineExists = async (id_turbine: string) => {
     const db = getDatabase();
     const turbineRef = ref(db, `TurbineData/${id_turbine}`);
@@ -42,62 +58,80 @@ export default function Device() {
       const snapshot = await get(turbineRef);
       return snapshot.exists();
     } catch (error) {
-      console.error("⚠️ Error saat mengecek database:", error);
+      console.error("Error saat mengecek database:", error);
       return false;
     }
   };
 
-  // Fungsi untuk menambahkan perangkat berdasarkan ID Turbine
   const handleAddDevice = async () => {
-    console.log("Checking inputTurbineId:", inputTurbineId);
-  
     if (!inputTurbineId.trim()) {
-      console.log("Alert triggered: No ID entered");
       showAlert("Masukkan ID Turbine terlebih dahulu!");
       return;
     }
-  
-    console.log("Checking Firebase for turbine:", inputTurbineId);
+
     const exists = await checkTurbineExists(inputTurbineId);
-    console.log("Turbine exists:", exists);
-  
+
     if (exists) {
-      console.log("Adding device to list...");
+      const isAlreadyAdded = devices.some(
+        (device) => device.id === inputTurbineId
+      );
+      if (isAlreadyAdded) {
+        showAlert("Device sudah ditambahkan sebelumnya.");
+        return;
+      }
+
       const newDevice = {
         id: inputTurbineId,
         name: `Turbine ${inputTurbineId}`,
         status: "Connected",
       };
-      setDevices([...devices, newDevice]);
+
+      const updatedDevices = [...devices, newDevice];
+      setDevices(updatedDevices);
+      saveDevicesToStorage(updatedDevices);
+
       setModalVisible(false);
       setInputTurbineId("");
     } else {
-      console.log("Alert triggered: Turbine not found");
       showAlert(`Turbine dengan ID "${inputTurbineId}" tidak ditemukan!`);
     }
   };
-  
+
+  const handleDeleteDevice = async (id: string) => {
+    const updatedDevices = devices.filter((device) => device.id !== id);
+    setDevices(updatedDevices);
+    await saveDevicesToStorage(updatedDevices);
+    showAlert(`Device dengan ID ${id} telah dihapus.`);
+  };
 
   return (
     <View style={{ flex: 1, padding: 20 }}>
-      {/* Button untuk menambahkan perangkat */}
-      <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
+      <TouchableOpacity
+        style={styles.addButton}
+        onPress={() => setModalVisible(true)}
+      >
         <Text style={styles.addButtonText}>Add Device</Text>
       </TouchableOpacity>
 
-      {/* Daftar perangkat yang terhubung */}
       <FlatList
         data={devices}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={styles.deviceItem}>
-            <Text style={styles.deviceName}>{item.name}</Text>
-            <Text style={styles.deviceStatus}>{item.status}</Text>
+            <View>
+              <Text style={styles.deviceName}>{item.name}</Text>
+              <Text style={styles.deviceStatus}>{item.status}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => handleDeleteDevice(item.id)}
+            >
+              <Text style={styles.deleteButtonText}>Hapus</Text>
+            </TouchableOpacity>
           </View>
         )}
       />
 
-      {/* Modal Dialog untuk input ID Turbine */}
       <Modal visible={modalVisible} transparent={true} animationType="slide">
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
@@ -109,10 +143,16 @@ export default function Device() {
               onChangeText={setInputTurbineId}
             />
             <View style={styles.buttonContainer}>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setModalVisible(false)}
+              >
                 <Text style={styles.buttonText}>Batal</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.confirmButton} onPress={handleAddDevice}>
+              <TouchableOpacity
+                style={styles.confirmButton}
+                onPress={handleAddDevice}
+              >
                 <Text style={styles.buttonText}>Cari & Tambah</Text>
               </TouchableOpacity>
             </View>
@@ -123,7 +163,6 @@ export default function Device() {
   );
 }
 
-// Styles
 const styles = StyleSheet.create({
   addButton: {
     backgroundColor: "#4CAF50",
@@ -143,6 +182,7 @@ const styles = StyleSheet.create({
     padding: 15,
     borderBottomWidth: 1,
     borderBottomColor: "#ddd",
+    alignItems: "center",
   },
   deviceName: {
     fontSize: 16,
@@ -151,6 +191,17 @@ const styles = StyleSheet.create({
   deviceStatus: {
     fontSize: 14,
     color: "#888",
+  },
+  deleteButton: {
+    backgroundColor: "#e74c3c",
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 5,
+  },
+  deleteButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 12,
   },
   modalContainer: {
     flex: 1,
@@ -205,4 +256,3 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 });
-

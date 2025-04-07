@@ -1,8 +1,17 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, Dimensions, ScrollView } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Dimensions,
+  ScrollView,
+  RefreshControl,
+} from "react-native";
 import { ProgressChart } from "react-native-chart-kit";
-import { database, ref, onValue } from "../firebaseConfig";
+import { database, ref, onValue, off } from "../firebaseConfig";
 import { format } from "date-fns";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Picker } from "@react-native-picker/picker";
 
 const unitMap: Record<string, string> = {
   arus: "A",
@@ -10,7 +19,7 @@ const unitMap: Record<string, string> = {
   tegangan: "Volt",
   rpm: "RPM",
   ketinggianAir: "cm",
-  debit: "L/s"
+  debit: "L/s",
 };
 
 const chartConfig = {
@@ -23,42 +32,108 @@ const chartConfig = {
 };
 
 const maxValues: Record<string, number> = {
-  arus: 5, 
-  daya: 50, 
-  tegangan: 10, 
-  rpm: 1000, 
+  arus: 5,
+  daya: 50,
+  tegangan: 10,
+  rpm: 1000,
   ketinggianAir: 30,
-  debit: 5
+  debit: 5,
 };
 
-
 export default function Home(): JSX.Element {
-  const [sensorData, setSensorData] = useState<{ arus: number; daya: number; tegangan: number; rpm: number ; ketinggianAir: number; debit: number}>({
+  const [sensorData, setSensorData] = useState({
     arus: 0,
     daya: 0,
     tegangan: 0,
     rpm: 0,
     ketinggianAir: 0,
-    debit: 0
+    debit: 0,
   });
-  
-  
-  const getCurrentDate = () => {
-    const today = new Date();
-    return today.toISOString().split("T")[0]; 
+
+  const [deviceList, setDeviceList] = useState<string[]>([]);
+  const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const isMounted = useRef(true);
+
+  const setSensorDataZero = () => {
+    setSensorData({
+      arus: 0,
+      daya: 0,
+      tegangan: 0,
+      rpm: 0,
+      ketinggianAir: 0,
+      debit: 0,
+    });
+  };
+
+  const fetchDevices = async () => {
+    try {
+      setRefreshing(true);
+      const storedDevices = await AsyncStorage.getItem("devices");
+
+      if (storedDevices && isMounted.current) {
+        const parsed = JSON.parse(storedDevices);
+        if (Array.isArray(parsed)) {
+          const ids = parsed.map((device: any) => device.id);
+          setDeviceList(ids);
+
+          if (ids.length > 0) {
+            setSelectedDevice((prev) => prev ?? ids[0]);
+          } else {
+            setSelectedDevice(null);
+            setSensorDataZero(); // reset nilai grafik
+          }
+        } else {
+          setDeviceList([]);
+          setSelectedDevice(null);
+          setSensorDataZero();
+        }
+      } else {
+        setDeviceList([]);
+        setSelectedDevice(null);
+        setSensorDataZero();
+      }
+    } catch (err) {
+      console.error("Gagal memuat device list:", err);
+      if (isMounted.current) {
+        setDeviceList([]);
+        setSelectedDevice(null);
+        setSensorDataZero();
+      }
+    } finally {
+      if (isMounted.current) setRefreshing(false);
+    }
   };
 
   useEffect(() => {
-    const today = format(new Date(), "yyyy-MM-dd");
-    const reference = ref(database, `TurbineData/turbine1/daily_data/${today}`);
+    isMounted.current = true;
+    fetchDevices();
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
-    const onValueChange = onValue(reference, (snapshot) => {
+  useEffect(() => {
+    if (!selectedDevice) {
+      setSensorDataZero();
+      return;
+    }
+
+    const today = format(new Date(), "yyyy-MM-dd");
+    const dataRef = ref(
+      database,
+      `TurbineData/${selectedDevice}/daily_data/${today}`
+    );
+
+    const handleValueChange = (
+      snapshot: import("firebase/database").DataSnapshot
+    ) => {
+      if (!isMounted.current) return;
+
       if (snapshot.exists()) {
-        const newData = snapshot.val() as Partial<typeof maxValues>; 
-      
-        console.log("Data diperbarui:", newData);
-      
-        const filteredData: { arus: number; daya: number; tegangan: number; rpm: number; ketinggianAir: number; debit: number } = {
+        const newData = snapshot.val();
+
+        const filteredData = {
           arus: (newData.arus ?? 0) / maxValues.arus,
           daya: (newData.daya ?? 0) / maxValues.daya,
           tegangan: (newData.tegangan ?? 0) / maxValues.tegangan,
@@ -66,52 +141,73 @@ export default function Home(): JSX.Element {
           ketinggianAir: (newData.water_level ?? 0) / maxValues.ketinggianAir,
           debit: (newData.flowRate ?? 0) / maxValues.debit,
         };
-      
-        setSensorData(filteredData);
-      }else{
-        setSensorData({
-          arus: 0,
-          daya: 0,
-          tegangan: 0,
-          rpm: 0,
-          ketinggianAir: 0,
-          debit: 0
-        });
-      }
-    });
 
-    return () => onValueChange();
-  }, []);
+        setSensorData(filteredData);
+      } else {
+        setSensorDataZero();
+      }
+    };
+
+    onValue(dataRef, handleValueChange);
+
+    return () => {
+      off(dataRef, "value", handleValueChange);
+    };
+  }, [selectedDevice]);
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={fetchDevices} />
+      }
+    >
       <Text style={styles.header}>System Performance</Text>
 
-      <View style={styles.grid}>
-        {sensorData ? (
-          Object.keys(sensorData).map((label, index) => (
-            <View key={index} style={styles.card}>
-              <Text style={styles.cardTitle}>{label.toUpperCase()}</Text>
+      <View style={styles.pickerWrapper}>
+        <Text style={styles.pickerLabel}>Device : </Text>
+        <Picker
+          selectedValue={selectedDevice}
+          onValueChange={(itemValue) => setSelectedDevice(itemValue)}
+          style={styles.picker}
+        >
+          {deviceList.length > 0 ? (
+            deviceList.map((device, index) => (
+              <Picker.Item label={device} value={device} key={index} />
+            ))
+          ) : (
+            <Picker.Item label="Tidak ada device" value={null} />
+          )}
+        </Picker>
+      </View>
 
-              <View style={styles.chartContainer}>
-                <ProgressChart
-                  data={{ labels: [label], data: [sensorData[label as keyof typeof sensorData]] }}
-                  width={Dimensions.get("window").width / 2.5}
-                  height={120}
-                  strokeWidth={12}
-                  radius={45}
-                  chartConfig={chartConfig} 
-                  hideLegend={true}
-                />
-                <Text style={styles.valueText}>
-                  {(sensorData[label as keyof typeof sensorData] * maxValues[label as keyof typeof maxValues]).toFixed(1)} {unitMap[label as keyof typeof unitMap]}
-                </Text>
-              </View>
+      <View style={styles.grid}>
+        {Object.keys(sensorData).map((label, index) => (
+          <View key={index} style={styles.card}>
+            <Text style={styles.cardTitle}>{label.toUpperCase()}</Text>
+            <View style={styles.chartContainer}>
+              <ProgressChart
+                data={{
+                  labels: [label],
+                  data: [sensorData[label as keyof typeof sensorData]],
+                }}
+                width={Dimensions.get("window").width / 2.5}
+                height={120}
+                strokeWidth={12}
+                radius={45}
+                chartConfig={chartConfig}
+                hideLegend={true}
+              />
+              <Text style={styles.valueText}>
+                {(
+                  sensorData[label as keyof typeof sensorData] *
+                  maxValues[label as keyof typeof maxValues]
+                ).toFixed(1)}{" "}
+                {unitMap[label as keyof typeof unitMap]}
+              </Text>
             </View>
-          ))
-        ) : (
-          <Text style={styles.noDataText}>No data available</Text>
-        )}
+          </View>
+        ))}
       </View>
     </ScrollView>
   );
@@ -123,11 +219,26 @@ const styles = StyleSheet.create({
     backgroundColor: "#f5f5f5",
   },
   header: {
-    fontSize: 20,
+    fontSize: 25,
     fontWeight: "bold",
     textAlign: "center",
     marginVertical: 15,
     color: "#25292e",
+  },
+  pickerWrapper: {
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  pickerLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 8,
+    color: "#333",
+  },
+  picker: {
+    backgroundColor: "#fff",
+    borderRadius: 6,
+    elevation: 2,
   },
   grid: {
     flexDirection: "row",
@@ -151,7 +262,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 14,
-    fontWeight: "semibold",
+    fontWeight: "600",
     marginBottom: 10,
     color: "#25292e",
   },
@@ -166,5 +277,4 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#007AFF",
   },
-  noDataText: { textAlign: 'center', fontSize: 18, color: 'red' },
 });
